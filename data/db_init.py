@@ -1,7 +1,7 @@
 from sqlalchemy import text
 from data.schema.base import Base, engine
 
-def init():
+def init_tables():
     Base.metadata.create_all(engine)
 
     with engine.connect() as conn:
