@@ -1,11 +1,67 @@
-import math
+import os
+from dotenv import load_dotenv
 from datetime import timedelta
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from data.data_generator import generate_temperature, generate_outages, generate_data
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, make_transient
+
+import data.schema.base as base_module
+import data.data_generator as gen_module
+
+from data.schema import Device, Reading
+from data.data_generator import generate_temperature, generate_outages, generate_data, devices
+
+load_dotenv()
+
+TEST_DATABASE_URL = os.getenv("DEV_DATABASE_URL")
+RANGE_START = pd.Timestamp("2026-08-01 00:00:00", tz="UTC")
+RANGE_END = pd.Timestamp("2026-09-01 00:00:00", tz="UTC")
+
+
+# ---------------------------------------------------------------------------
+# Generates dataset once to be reused across tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def db_engine():
+    engine = create_engine(TEST_DATABASE_URL)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def generated_data(db_engine):
+    mp = pytest.MonkeyPatch()
+    mp.setattr(base_module, "engine", db_engine)
+    mp.setattr(gen_module, "engine", db_engine)
+
+    captured_outages = []
+    original_generate_outages = gen_module.generate_outages
+
+    def spy(rng, start, end):
+        result = original_generate_outages(rng, start, end)
+        captured_outages.append(result)
+        return result
+
+    mp.setattr(gen_module, "generate_outages", spy)
+
+    base_module.Base.metadata.drop_all(db_engine)
+    generate_data()
+
+    outages_by_device = {
+        device.id: outages for device, outages in zip(devices, captured_outages)
+    }
+
+    yield {"engine": db_engine, "outages_by_device": outages_by_device}
+
+    mp.undo()
+    for device in devices:
+        make_transient(device)
+    base_module.Base.metadata.drop_all(db_engine)
 
 
 # ---------------------------------------------------------------------------
