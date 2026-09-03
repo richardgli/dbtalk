@@ -9,3 +9,4 @@ class Base(DeclarativeBase):
     pass
 
 engine = create_engine(os.getenv("DATABASE_URL"))
+test_engine = create_engine(os.getenv("DEV_DATABASE_URL"))

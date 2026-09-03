@@ -13,6 +13,8 @@ import data.schema.base as base_module
 import data.data_generator as gen_module
 
 from data.schema import Device, Reading
+from data.schema.base import test_engine
+from data.db_init import init_dev_tables
 from data.data_generator import generate_temperature, generate_outages, generate_data, devices
 
 load_dotenv()
@@ -28,7 +30,7 @@ RANGE_END = pd.Timestamp("2026-09-01 00:00:00", tz="UTC")
 
 @pytest.fixture(scope="session")
 def db_engine():
-    engine = create_engine(TEST_DATABASE_URL)
+    engine = test_engine
     yield engine
     engine.dispose()
 
@@ -50,11 +52,13 @@ def generated_data(db_engine):
     mp.setattr(gen_module, "generate_outages", spy)
 
     base_module.Base.metadata.drop_all(db_engine)
+    init_dev_tables()
+
+    device_ids = [device.id for device in devices]
+
     generate_data()
 
-    outages_by_device = {
-        device.id: outages for device, outages in zip(devices, captured_outages)
-    }
+    outages_by_device = dict(zip(device_ids, captured_outages))
 
     yield {"engine": db_engine, "outages_by_device": outages_by_device}
 
@@ -111,45 +115,60 @@ class TestGenerateTemperature:
 # ---------------------------------------------------------------------------
 
 class TestGenerateOutages:
-    @pytest.fixture
-    def time_range(self):
-        start = pd.Timestamp("2026-08-01 00:00:00", tz="UTC")
-        end = pd.Timestamp("2026-09-01 00:00:00", tz="UTC")
-        return start, end
-
-    def test_same_seed_is_deterministic(self, time_range):
-        start, end = time_range
-        outages_a = generate_outages(np.random.default_rng(seed=8), start, end)
-        outages_b = generate_outages(np.random.default_rng(seed=8), start, end)
+    def test_same_seed_is_deterministic(self):
+        outages_a = generate_outages(np.random.default_rng(seed=8), RANGE_START, RANGE_END)
+        outages_b = generate_outages(np.random.default_rng(seed=8), RANGE_START, RANGE_END)
         assert outages_a == outages_b
 
-    def test_outage_count_within_expected_bounds(self, time_range):
-        start, end = time_range
-        outages = generate_outages(np.random.default_rng(seed=1), start, end)
+    def test_outage_count_within_expected_bounds(self):
+        outages = generate_outages(np.random.default_rng(seed=1), RANGE_START, RANGE_END)
         assert 1 <= len(outages) <= 4
 
-    def test_each_outage_starts_before_it_ends(self, time_range):
-        start, end = time_range
-        outages = generate_outages(np.random.default_rng(seed=2), start, end)
+    def test_each_outage_starts_before_it_ends(self):
+        outages = generate_outages(np.random.default_rng(seed=2), RANGE_START, RANGE_END)
         for outage_start, outage_end in outages:
             assert outage_start < outage_end
 
-    def test_outages_are_sorted_and_non_overlapping(self, time_range):
-        start, end = time_range
-        outages = generate_outages(np.random.default_rng(seed=3), start, end)
-        for (prev_start, prev_end), (cur_start, cur_end) in zip(outages, outages[1:]):
+    def test_outages_are_sorted_and_non_overlapping(self):
+        outages = generate_outages(np.random.default_rng(seed=3), RANGE_START, RANGE_END)
+        for (_, prev_end), (cur_start, _) in zip(outages, outages[1:]):
             assert prev_end < cur_start  # strictly separated, in order
 
-    def test_outages_fall_within_the_requested_range(self, time_range):
-        start, end = time_range
-        outages = generate_outages(np.random.default_rng(seed=4), start, end)
+    def test_outages_fall_within_the_requested_range(self):
+        outages = generate_outages(np.random.default_rng(seed=4), RANGE_START, RANGE_END)
         for outage_start, outage_end in outages:
-            assert start <= outage_start <= end
-            assert start <= outage_end <= end
+            assert RANGE_START <= outage_start <= RANGE_END
+            assert RANGE_START <= outage_end <= RANGE_END
 
-    def test_outage_boundaries_are_multiples_of_ten_minutes(self, time_range):
-        start, end = time_range
-        outages = generate_outages(np.random.default_rng(seed=5), start, end)
+    def test_outage_boundaries_are_multiples_of_ten_minutes(self):
+        outages = generate_outages(np.random.default_rng(seed=5), RANGE_START, RANGE_END)
         for outage_start, outage_end in outages:
-            assert (outage_start - start).total_seconds() % 600 == 0
-            assert (outage_end - start).total_seconds() % 600 == 0
+            assert (outage_start - RANGE_START).total_seconds() % 600 == 0
+            assert (outage_end - RANGE_START).total_seconds() % 600 == 0
+
+
+# ---------------------------------------------------------------------------
+# generate_data tests
+# ---------------------------------------------------------------------------
+
+class TestGenerateDataReadings:
+    def test_creates_readings_for_every_device(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            assert session.query(Device).count() == 6
+            assert session.query(Reading).count() > 0
+
+    def test_no_readings_fall_inside_an_outage(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            for device in session.query(Device).all():
+                outages = generated_data["outages_by_device"][device.id]
+                times = [
+                    pd.Timestamp(r.time).tz_convert("UTC")
+                    for r in session.query(Reading).filter(Reading.device_id == device.id).all()
+                ]
+                for start, end in outages:
+                    assert not any(start <= t <= end for t in times)
+
+    def test_reading_timestamps_are_within_generation_range(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            times = [pd.Timestamp(r.time).tz_convert("UTC") for r in session.query(Reading).all()]
+        assert all(RANGE_START <= t <= RANGE_END for t in times)

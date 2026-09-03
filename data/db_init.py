@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from data.schema.base import Base, engine
+from data.schema.base import Base, engine, test_engine
 
 def init_tables():
     Base.metadata.create_all(engine)
@@ -12,3 +12,7 @@ def init_tables():
             "SELECT create_hypertable('device_status', 'time', if_not_exists => TRUE)"
         ))
         conn.commit()
+
+
+def init_dev_tables():
+    Base.metadata.create_all(test_engine)
