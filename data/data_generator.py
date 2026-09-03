@@ -1,4 +1,3 @@
-from datetime import timedelta
 import numpy as np
 import pandas as pd
 import math
@@ -34,8 +33,8 @@ def generate_outages(rng, start_time: pd.Timestamp, end_time: pd.Timestamp) -> L
         start_minutes = start_minutes - start_minutes % 10
         end_minutes = end_minutes - end_minutes % 10
 
-        outage_start_time = start_time + timedelta(minutes=start_minutes)
-        outage_end_time = start_time + timedelta(minutes=end_minutes)
+        outage_start_time = start_time + pd.Timedelta(minutes=start_minutes)
+        outage_end_time = start_time + pd.Timedelta(minutes=end_minutes)
 
         outages.append((outage_start_time, outage_end_time))
 
