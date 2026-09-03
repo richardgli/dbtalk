@@ -4,7 +4,7 @@ import pandas as pd
 import math
 from typing import List, Tuple
 
-from sqlalchemy import Session
+from sqlalchemy.orm import Session
 from data.schema.base import engine
 from data.schema import Device, Reading
 from data.db_init import init_tables
@@ -19,7 +19,7 @@ devices = [
 ]
 
 
-def generate_outages(rng, start_time: pd.datetime, end_time: pd.datetime) -> List[pd.datetime]:
+def generate_outages(rng, start_time: pd.Timestamp, end_time: pd.Timestamp) -> List[pd.Timestamp]:
     """Generates outage events (2-5 events) within a given date range."""
     total_minutes = (end_time - start_time).total_seconds() / 60
     num_outages = rng.integers(2, 5)
@@ -35,12 +35,12 @@ def generate_outages(rng, start_time: pd.datetime, end_time: pd.datetime) -> Lis
         end_minutes = end_minutes - end_minutes % 10
 
         outage_start_time = start_time + timedelta(minutes=start_minutes)
-        outage_end_time = end_time + timedelta(minutes=end_minutes)
+        outage_end_time = start_time + timedelta(minutes=end_minutes)
 
         outages.append((outage_start_time, outage_end_time))
 
     # Merging overlapping outage events
-    outages = outages.sort(key=lambda x: x[0])
+    outages.sort(key=lambda x: x[0])
     merged_outages: List[Tuple[int, int]] = []
     for start, end in outages:
         if merged_outages and start <= merged_outages[-1][1]:
@@ -78,9 +78,9 @@ def generate_data() -> None:
         outages = generate_outages(rng, date_range[0], date_range[-1])
 
         for utc_timestamp in date_range:
-            if utc_timestamp >= outages[0][0] and utc_timestamp <= outages[cur_outage][1]:
+            if utc_timestamp >= outages[cur_outage][0] and utc_timestamp <= outages[cur_outage][1]:
                 continue
-            elif cur_outage < len(outages):
+            elif utc_timestamp > outages[0][0] and cur_outage < len(outages):
                 cur_outage += 1
 
             utc_hour = utc_timestamp.hour + utc_timestamp.minute / 60
