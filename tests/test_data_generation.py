@@ -12,16 +12,59 @@ from sqlalchemy.orm import Session, make_transient
 import data.schema.base as base_module
 import data.data_generator as gen_module
 
-from data.schema import Device, Reading
+from data.schema import Device, Reading, Status
 from data.schema.base import test_engine
 from data.db_init import init_dev_tables
 from data.data_generator import generate_temperature, generate_outages, generate_data, devices
 
 load_dotenv()
 
-TEST_DATABASE_URL = os.getenv("DEV_DATABASE_URL")
+DEVICE_IDS = [device.id for device in devices]
+DEVICE_SNAPSHOTS = [
+    {
+        "id": device.id,
+        "name": device.name,
+        "latitude": device.latitude,
+        "longitude": device.longitude,
+        "timezone": device.timezone,
+    }
+    for device in devices
+]
 RANGE_START = pd.Timestamp("2026-08-01 00:00:00", tz="UTC")
 RANGE_END = pd.Timestamp("2026-09-01 00:00:00", tz="UTC")
+
+
+def _reset_devices():
+    for device, snapshot in zip(devices, DEVICE_SNAPSHOTS):
+        make_transient(device)
+        for key, value in snapshot.items():
+            setattr(device, key, value)
+
+
+def _as_utc(dt):
+    ts = pd.Timestamp(dt)
+    if ts.tzinfo is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
+
+
+def _statuses_for_device(session, device_id):
+    return (
+        session.query(Status)
+        .filter(Status.device_id == device_id)
+        .order_by(Status.time)
+        .all()
+    )
+
+
+def _expected_statuses(outages):
+    expected = []
+    if outages[0][0] > RANGE_START:
+        expected.append((RANGE_START, True))
+    for start, end in outages:
+        expected.append((start, False))
+        expected.append((end, True))
+    return expected
 
 
 # ---------------------------------------------------------------------------
@@ -54,17 +97,14 @@ def generated_data(db_engine):
     base_module.Base.metadata.drop_all(db_engine)
     init_dev_tables()
 
-    device_ids = [device.id for device in devices]
-
     generate_data()
+    _reset_devices()
 
-    outages_by_device = dict(zip(device_ids, captured_outages))
+    outages_by_device = dict(zip(DEVICE_IDS, captured_outages))
 
     yield {"engine": db_engine, "outages_by_device": outages_by_device}
 
     mp.undo()
-    for device in devices:
-        make_transient(device)
     base_module.Base.metadata.drop_all(db_engine)
 
 
@@ -162,7 +202,7 @@ class TestGenerateDataReadings:
             for device in session.query(Device).all():
                 outages = generated_data["outages_by_device"][device.id]
                 times = [
-                    pd.Timestamp(r.time).tz_convert("UTC")
+                    _as_utc(r.time)
                     for r in session.query(Reading).filter(Reading.device_id == device.id).all()
                 ]
                 for start, end in outages:
@@ -170,5 +210,90 @@ class TestGenerateDataReadings:
 
     def test_reading_timestamps_are_within_generation_range(self, generated_data):
         with Session(generated_data["engine"]) as session:
-            times = [pd.Timestamp(r.time).tz_convert("UTC") for r in session.query(Reading).all()]
+            times = [_as_utc(r.time) for r in session.query(Reading).all()]
         assert all(RANGE_START <= t <= RANGE_END for t in times)
+
+
+# ---------------------------------------------------------------------------
+# generate_data tests for status
+# ---------------------------------------------------------------------------
+
+class TestGenerateDataStatuses:
+    def test_status_count_matches_outage_count(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            for device_id in DEVICE_IDS:
+                outages = generated_data["outages_by_device"][device_id]
+                statuses = _statuses_for_device(session, device_id)
+                expected_count = len(_expected_statuses(outages))
+                assert len(statuses) == expected_count
+
+    def test_status_times_and_values_match_outage_boundaries_exactly(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            for device_id in DEVICE_IDS:
+                outages = generated_data["outages_by_device"][device_id]
+                statuses = _statuses_for_device(session, device_id)
+
+                expected = _expected_statuses(outages)
+                actual = [(_as_utc(s.time), s.online) for s in statuses]
+                assert actual == expected
+
+    def test_statuses_strictly_alternate_online_offline(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            for device_id in DEVICE_IDS:
+                statuses = _statuses_for_device(session, device_id)
+                for prev, cur in zip(statuses, statuses[1:]):
+                    assert prev.online != cur.online
+
+    def test_final_status_is_online(self, generated_data):
+        with Session(generated_data["engine"]) as session:
+            for device_id in DEVICE_IDS:
+                statuses = _statuses_for_device(session, device_id)
+                assert statuses[-1].online is True
+
+
+@pytest.fixture
+def isolated_generated_data(monkeypatch, db_engine, request):
+    monkeypatch.setattr(base_module, "engine", db_engine)
+    monkeypatch.setattr(gen_module, "engine", db_engine)
+    monkeypatch.setattr(
+        gen_module, "generate_outages", lambda rng, start, end: request.param
+    )
+
+    base_module.Base.metadata.drop_all(db_engine)
+    init_dev_tables()
+
+    generate_data()
+    _reset_devices()
+
+    yield {"engine": db_engine, "outages": request.param}
+
+    base_module.Base.metadata.drop_all(db_engine)
+
+# ---------------------------------------------------------------------------
+# generate_data status edge cases
+# ---------------------------------------------------------------------------
+
+class TestGenerateDataStatusEdgeCases:
+    @pytest.mark.parametrize(
+        "isolated_generated_data",
+        [[(RANGE_START + pd.Timedelta(hours=2), RANGE_START + pd.Timedelta(hours=3))]],
+        indirect=True,
+    )
+
+    def test_leading_true_status_when_device_starts_online(self, isolated_generated_data):
+        with Session(isolated_generated_data["engine"]) as session:
+            first = _statuses_for_device(session, DEVICE_IDS[0])[0]
+        assert _as_utc(first.time) == RANGE_START
+        assert first.online is True
+
+    @pytest.mark.parametrize(
+        "isolated_generated_data",
+        [[(RANGE_START, RANGE_START + pd.Timedelta(hours=1))]],
+        indirect=True,
+    )
+
+    def test_no_leading_true_status_when_device_starts_offline(self, isolated_generated_data):
+        with Session(isolated_generated_data["engine"]) as session:
+            first = _statuses_for_device(session, DEVICE_IDS[0])[0]
+        assert _as_utc(first.time) == RANGE_START
+        assert first.online is False
