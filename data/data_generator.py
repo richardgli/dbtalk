@@ -27,12 +27,15 @@ def generate_outages(rng, start_time: pd.datetime, end_time: pd.datetime) -> Lis
 
     # Creating outage events by generating random start and end times
     for _ in range(num_outages):
-        outage_start_time = rng.integers(0, total_minutes)
-        outage_end_time = rng.integers(outage_start_time + 10, total_minutes)
+        start_minutes = rng.integers(0, total_minutes)
+        end_minutes = rng.integers(start_minutes + 10, total_minutes)
 
         # Floor to nearest multiple of 10
-        outage_start_time = outage_start_time - outage_start_time % 10
-        outage_end_time = outage_end_time - outage_end_time % 10
+        start_minutes = start_minutes - start_minutes % 10
+        end_minutes = end_minutes - end_minutes % 10
+
+        outage_start_time = start_time + timedelta(minutes=start_minutes)
+        outage_end_time = end_time + timedelta(minutes=end_minutes)
 
         outages.append((outage_start_time, outage_end_time))
 
@@ -69,12 +72,17 @@ def generate_data() -> None:
     readings: List[Reading] = []
     date_range = pd.date_range(start="2026-08-01 00:00:00", end="2026-09-01 00:00:00", freq="10min", tz="UTC")
     rng = np.random.default_rng(seed=8)
+    cur_outage = 0
 
     for device in devices:
         outages = generate_outages(rng, date_range[0], date_range[-1])
 
         for utc_timestamp in date_range:
-            # continue if utc_timestamp falls within an outage
+            if utc_timestamp >= outages[0][0] and utc_timestamp <= outages[cur_outage][1]:
+                continue
+            elif cur_outage < len(outages):
+                cur_outage += 1
+
             utc_hour = utc_timestamp.hour + utc_timestamp.minute / 60
             day_of_year = utc_timestamp.timetuple().tm_yday
             temperature = generate_temperature(utc_hour, day_of_year, device.latitude, device.longitude)
