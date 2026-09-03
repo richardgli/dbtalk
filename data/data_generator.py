@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from sqlalchemy.orm import Session
 from data.schema.base import engine
-from data.schema import Device, Reading
+from data.schema import Device, Reading, Status
 from data.db_init import init_tables
 
 devices = [
@@ -69,18 +69,27 @@ def generate_data() -> None:
     init_tables()
 
     readings: List[Reading] = []
+    statuses: List[Status] = []
     date_range = pd.date_range(start="2026-08-01 00:00:00", end="2026-09-01 00:00:00", freq="10min", tz="UTC")
     rng = np.random.default_rng(seed=8)
-    cur_outage = 0
 
     for device in devices:
+        cur_outage = 0
         outages = generate_outages(rng, date_range[0], date_range[-1])
 
+        if outages[0][0] > date_range[0]:
+            statuses.append(Status(device_id=device.id, time=date_range[0], online=True))
+
+        for outage in outages:
+            statuses.append(Status(device_id=device.id, time=outage[0], online=False))
+            statuses.append(Status(device_id=device.id, time=outage[1], online=True))
+
         for utc_timestamp in date_range:
-            if utc_timestamp >= outages[cur_outage][0] and utc_timestamp <= outages[cur_outage][1]:
-                continue
-            elif utc_timestamp > outages[0][0] and cur_outage < len(outages):
-                cur_outage += 1
+            if cur_outage < len(outages):
+                if utc_timestamp >= outages[cur_outage][0] and utc_timestamp <= outages[cur_outage][1]:
+                    continue
+                elif utc_timestamp > outages[cur_outage][1]:
+                    cur_outage += 1
 
             utc_hour = utc_timestamp.hour + utc_timestamp.minute / 60
             day_of_year = utc_timestamp.timetuple().tm_yday
@@ -91,4 +100,5 @@ def generate_data() -> None:
     with Session(engine) as session:
         session.add_all(devices)
         session.add_all(readings)
+        session.add_all(statuses)
         session.commit()
