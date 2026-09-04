@@ -110,7 +110,7 @@
             "category": "edge_cases",
             "question": "Did the São Paulo device have any readings during a period when it should have been offline?",
             "reference_sql": "WITH time_pairs AS (SELECT time, online, LEAD(time) OVER (ORDER BY time) AS next_time, LEAD(online) OVER (ORDER BY time) AS next_online FROM device_status WHERE device_id = 2), outage_events AS (SELECT time, next_time FROM time_pairs WHERE next_online IS TRUE AND online IS FALSE) SELECT r.* FROM sensor_readings r JOIN outage_events o ON r.time >= o.time AND r.time < o.next_time WHERE r.device_id = 2;",
-            "expected_answer": "NO_DATA"
+            "expected_answer": false
         },
         {
             "id": "q17",
