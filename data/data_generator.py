@@ -51,7 +51,7 @@ def generate_outages(rng, start_time: pd.Timestamp, end_time: pd.Timestamp) -> L
 
 
 def generate_temperature(utc_hour: float, day_of_year: int, latitude: float, longitude: float) -> float:
-    """Uses the dynamic temperature formula to approximate a temperature reading."""
+    """Uses the dynamic temperature formula to approximate a temperature reading (in degrees Celsius)."""
     latitude_rad = math.radians(latitude)
     base_temp = 30 - 40 * math.pow(math.sin(latitude_rad), 2)
     seasonal_amplitude = 20 * math.sin(abs(latitude_rad))
