@@ -19,15 +19,15 @@ devices = [
 
 
 def generate_outages(rng, start_time: pd.Timestamp, end_time: pd.Timestamp) -> List[pd.Timestamp]:
-    """Generates outage events (2-5 events) within a given date range."""
+    """Generates outage events (1-4 events) within a given date range."""
     total_minutes = (end_time - start_time).total_seconds() / 60
-    num_outages = rng.integers(2, 5)
+    num_outages = rng.integers(1, 5)
     outages: List[Tuple[int, int]] = []
 
     # Creating outage events by generating random start and end times
     for _ in range(num_outages):
         start_minutes = rng.integers(0, total_minutes)
-        end_minutes = rng.integers(start_minutes + 10, total_minutes)
+        end_minutes = rng.integers(start_minutes + 1, total_minutes)
 
         # Floor to nearest multiple of 10
         start_minutes = start_minutes - start_minutes % 10
@@ -70,7 +70,7 @@ def generate_data() -> None:
 
     readings: List[Reading] = []
     statuses: List[Status] = []
-    date_range = pd.date_range(start="2026-08-01 00:00:00", end="2026-09-01 00:00:00", freq="10min", tz="UTC")
+    date_range = pd.date_range(start="2026-08-01 00:00:00", end="2026-09-01 00:00:00", freq="1min", tz="UTC")
     rng = np.random.default_rng(seed=8)
 
     for device in devices:
