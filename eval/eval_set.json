@@ -53,7 +53,7 @@
             "id": "q08",
             "category": "device_comparison",
             "question": "Which device was warmer, London or Paris?",
-            "reference_sql": "SELECT device_id, ROUND(CAST(AVG(temperature) AS NUMERIC), 2) FROM sensor_readings WHERE device_id IN (4, 5) GROUP BY device_id;",
+            "reference_sql": "SELECT device_id, ROUND(CAST(AVG(temperature) AS NUMERIC), 2) FROM sensor_readings WHERE device_id IN (4, 5) GROUP BY device_id ORDER BY ROUND(CAST(AVG(temperature) AS NUMERIC), 2) DESC LIMIT 1;",
             "expected_answer": [5, 15.28]
         },
         {
@@ -74,7 +74,7 @@
             "id": "q11",
             "category": "outage_events",
             "question": "Which device had the most total downtime in August 2026?",
-            "reference_sql": "WITH time_pairs AS (SELECT device_id, time, online, LEAD(time) OVER (PARTITION BY device_id ORDER BY time) AS next_time, LEAD(online) OVER (PARTITION BY device_id ORDER BY time) AS next_online FROM device_status) SELECT device_id, ROUND(CAST(SUM(EXTRACT(EPOCH FROM (next_time - time)) / 3600) AS NUMERIC), 2) FROM time_pairs WHERE next_online IS TRUE AND online IS FALSE GROUP BY device_id;",
+            "reference_sql": "WITH time_pairs AS (SELECT device_id, time, online, LEAD(time) OVER (PARTITION BY device_id ORDER BY time) AS next_time, LEAD(online) OVER (PARTITION BY device_id ORDER BY time) AS next_online FROM device_status), results AS (SELECT device_id, ROUND(CAST(SUM(EXTRACT(EPOCH FROM (next_time - time)) / 3600) AS NUMERIC), 2) AS total_downtime FROM time_pairs WHERE next_online IS TRUE AND online IS FALSE GROUP BY device_id) SELECT device_id, total_downtime FROM results ORDER BY total_downtime DESC LIMIT 1;",
             "expected_answer": [2, 673.17]
         },
         {
@@ -82,7 +82,7 @@
             "category": "outage_events",
             "question": "Was the Seattle device online or offline at 3:00 PM UTC on August 20, 2026?",
             "reference_sql": "SELECT online FROM device_status WHERE device_id = 1 AND time <= '2026-08-20 15:00:00' ORDER BY time DESC LIMIT 1;",
-            "expected_answer": "Offline"
+            "expected_answer": false
         },
         {
             "id": "q13",
@@ -95,7 +95,7 @@
             "id": "q14",
             "category": "joined_tables",
             "question": "Which device is geographically closest to Seattle?",
-            "reference_sql": "SELECT d2.id, SQRT((d2.latitude - d1.latitude)^2 + (d2.longitude - d1.longitude)^2) FROM devices d1 CROSS JOIN devices d2 WHERE d1.name = 'd_seattle' AND d2.name != 'd_seattle';",
+            "reference_sql": "WITH results AS (SELECT d2.id AS device_id, SQRT((d2.latitude - d1.latitude)^2 + (d2.longitude - d1.longitude)^2) AS distance FROM devices d1 CROSS JOIN devices d2 WHERE d1.name = 'd_seattle' AND d2.name != 'd_seattle') SELECT device_id FROM results ORDER BY distance LIMIT 1;",
             "expected_answer": 6
         },
         {
@@ -110,14 +110,14 @@
             "category": "edge_cases",
             "question": "Did the São Paulo device have any readings during a period when it should have been offline?",
             "reference_sql": "WITH time_pairs AS (SELECT time, online, LEAD(time) OVER (ORDER BY time) AS next_time, LEAD(online) OVER (ORDER BY time) AS next_online FROM device_status WHERE device_id = 2), outage_events AS (SELECT time, next_time FROM time_pairs WHERE next_online IS TRUE AND online IS FALSE) SELECT r.* FROM sensor_readings r JOIN outage_events o ON r.time >= o.time AND r.time < o.next_time WHERE r.device_id = 2;",
-            "expected_answer": "No"
+            "expected_answer": "NO_DATA"
         },
         {
             "id": "q17",
             "category": "ambiguous_questions",
             "question": "What's the weather like in Tokyo?",
             "reference_sql": "SELECT * FROM devices WHERE name = 'd_tokyo';",
-            "expected_answer": "There is no device in Tokyo."
+            "expected_answer": "NO_DATA"
         }
     ]
 }
