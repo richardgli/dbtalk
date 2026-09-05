@@ -91,3 +91,35 @@ def check_answer(q: dict, response: str) -> Tuple[str, str]:
         return check_numeric(float(expected), response)
 
     return "review", "unrecognized expected_answer type"
+
+
+def get_agent_response(question: dict):
+    pass
+
+
+def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
+    questions = load_eval_set(eval_set_path)
+    results = []
+
+    for q in questions:
+        response = agent_fn(q)
+        verdict, reason = check_answer(q, response)
+        results.append(EvalResult(
+            id=q["id"], question=q["question"], expected=q["expected_answer"], agent_response=response, verdict=verdict, reason=reason,
+        ))
+
+    return results
+
+
+def print_summary(results: List[EvalResult]):
+    counts = {"pass": 0, "fail": 0, "review": 0}
+    for r in results:
+        counts[r.verdict] += 1
+        print(f"[{r.verdict.upper():6}] {r.id}: {r.reason}")
+
+    print(f"\n{counts['pass']} passed, {counts['fail']} failed, {counts["review"]} need review out of {len(results)}")
+
+
+if __name__ == "__main__":
+    results = run_eval("eval/eval_set.json", get_agent_response)
+    print_summary(results)
