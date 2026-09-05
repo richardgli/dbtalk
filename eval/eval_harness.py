@@ -3,6 +3,8 @@ import re
 from typing import Any, List, Tuple
 from dataclasses import dataclass
 
+from agent import agent_setup
+
 DEVICE_NAMES = {
     1: "seattle", 2: "sao paulo", 3: "sydney", 4: "london", 5: "paris", 6: "victoria",
 }
@@ -94,7 +96,8 @@ def check_answer(q: dict, response: str) -> Tuple[str, str]:
 
 
 def get_agent_response(question: dict):
-    pass
+    agent = agent_setup()
+    return agent.invoke({"messages": [{"role": "user", "content": question}]})
 
 
 def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
@@ -102,8 +105,16 @@ def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
     results = []
 
     for q in questions:
-        response = agent_fn(q)
-        verdict, reason = check_answer(q, response)
+        print(f"Question {q["id"]}: {q["question"]}")
+        response = agent_fn(q["question"])
+
+        final_text = next(
+            msg.content for msg in reversed(response["messages"])
+            if msg.type == "ai" and msg.content
+        )
+
+        print(f"Answer: {final_text}\n")
+        verdict, reason = check_answer(q, final_text)
         results.append(EvalResult(
             id=q["id"], question=q["question"], expected=q["expected_answer"], agent_response=response, verdict=verdict, reason=reason,
         ))
