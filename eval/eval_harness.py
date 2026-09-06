@@ -41,7 +41,10 @@ def check_device_answer(expected: list, response: str, device_names: dict, toler
     id_mentioned = str(device_id) in response or name in response.lower()
 
     numbers = [float(n) for n in re.findall(r"-?\d+\.?\d*", response)]
-    value_matched = any(abs(n - value) <= tolerance for n in numbers)
+    if value:
+        value_matched = any(abs(n - value) <= tolerance for n in numbers)
+    else:
+        value_matched = False
 
     if id_mentioned and value and value_matched:
         return "pass", f"device '{name}' and value ~{value} received"
