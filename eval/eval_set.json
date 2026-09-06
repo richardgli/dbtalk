@@ -80,7 +80,7 @@
         {
             "id": "q12",
             "category": "outage_events",
-            "question": "Was the Seattle device online or offline at 3:00 PM UTC on August 20, 2026?",
+            "question": "Was the Seattle device online at 3:00 PM UTC on August 20, 2026?",
             "reference_sql": "SELECT online FROM device_status WHERE device_id = 1 AND time <= '2026-08-20 15:00:00' ORDER BY time DESC LIMIT 1;",
             "expected_answer": false
         },
@@ -96,7 +96,7 @@
             "category": "joined_tables",
             "question": "Which device is geographically closest to Seattle other than Seattle?",
             "reference_sql": "WITH results AS (SELECT d2.id AS device_id, SQRT((d2.latitude - d1.latitude)^2 + (d2.longitude - d1.longitude)^2) AS distance FROM devices d1 CROSS JOIN devices d2 WHERE d1.name = 'd_seattle' AND d2.name != 'd_seattle') SELECT device_id FROM results ORDER BY distance LIMIT 1;",
-            "expected_answer": 6
+            "expected_answer": [6, null]
         },
         {
             "id": "q15",

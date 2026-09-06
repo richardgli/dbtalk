@@ -43,28 +43,29 @@ def check_device_answer(expected: list, response: str, device_names: dict, toler
     numbers = [float(n) for n in re.findall(r"-?\d+\.?\d*", response)]
     value_matched = any(abs(n - value) <= tolerance for n in numbers)
 
-    if id_mentioned and value_matched:
+    if id_mentioned and value and value_matched:
         return "pass", f"device '{name}' and value ~{value} received"
-    elif id_mentioned:
+    elif id_mentioned and value and not value_matched:
         return "review", f"device '{name}' mentioned but value {value} not found"
+    elif id_mentioned and not value:
+        return "pass", f"device '{name}' received"
     else:
         return "fail", f"device '{name}' not mentioned"
 
 
 def check_boolean(expected: bool, response: str) -> Tuple[str, str]:
-    negations = ["no", "not", "offline", "wasn't", "did not", "false"]
-    affirmations = ["yes", "online", "was", "did", "true"]
-    resp_lower = response.lower()
+    match = re.match(r"^\s*ANSWER:\s*(YES|NO|UNKNOWN)\b", response, re.IGNORECASE)
+    if not match:
+        return "review", "no ANSWER: token found at start of response"
 
-    has_negation = any(word in resp_lower for word in negations)
-    has_affirmation = any(word in resp_lower for word in affirmations)
+    answer = match.group(1).upper()
+    if answer == "UNKNOWN":
+        return "review", "model reported UNKNOWN — check if NO_DATA was legitimate"
 
-    if expected is False and has_negation and not has_affirmation:
-        return "pass", "negation detected, matches expected False"
-    elif expected is True and has_affirmation and not has_negation:
-        return "pass", "affirmation detected, matches expected True"
-    else:
-        return "review", "ambiguous or conflicting signals in response"
+    got = (answer == "YES")
+    if got == expected:
+        return "pass", f"ANSWER: {answer} matches expected {expected}"
+    return "fail", f"ANSWER: {answer} does not match expected {expected}"
 
 
 def check_no_data(response: str) -> Tuple[str, str]:

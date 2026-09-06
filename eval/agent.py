@@ -35,13 +35,13 @@ def get_devices_context():
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT *
+            SELECT id, name, latitude, longitude
             FROM devices;
             """
         )
         rows = cur.fetchall()
     conn.close()
-    return "\n".join(f"id={i}, name={n}, lat={la}, lon={lo}, tz={tz}" for i, n, la, lo, tz in rows)
+    return "\n".join(f"id={i}, name={n}, lat={la}, lon={lo}" for i, n, la, lo in rows)
 
 
 DENY_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|REPLACE|TRUNCATE)\b", re.I)
@@ -88,7 +88,7 @@ def agent_setup() -> CompiledStateGraph:
     Devices reference table (device names map to device IDs):
     {get_devices_context()}
 
-    The device_status table logs state CHANGES (rows only when online/offline flips), not continuous readings.
+    The device_status table logs state CHANGES (rows only when online/offline flips), not continuous readings. Therefore, you must find the intervals between the appropriate rows in device_status to find status at a point in time and calculate downtime.
 
     Rules:
     - Think step-by-step.
@@ -96,11 +96,17 @@ def agent_setup() -> CompiledStateGraph:
     - You can only use read-only queries: no INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/REPLACE/TRUNCATE.
     - If the tool returns 'Error:', read the error message, revise the SQL and try again.
     - If a query returns a negative time value, revise the SQL and try again. Time must be positive.
-    - Limit to 5 attempts. Say plainly when you are unsuccessful.
-    - Your final answer must always state the exact numeric value(s) returned by the query. For example, if asked "which device had the highest average temperature," answer "Device X had the highest average temperature at Y.YY°C".
     - For yes/no or true/false questions, state the answer as an unambiguous single word or short phrase at the start of your response.
-    - If a query returns NO_DATA, say so plainly. NEVER guess or infer an answer you don't have direct evidence for.
+    - For yes/no or true/false questions, your response must begin with exactly one line:
+    ANSWER: YES
+    or
+    ANSWER: NO
+    or
+    ANSWER: UNKNOWN   (use this if the data returned NO_DATA — never guess)
+    Follow this line with your explanation.
+    - Your final answer must always state the exact numeric value(s) returned by the query. For example, if asked "which device had the highest average temperature," answer "Device X had the highest average temperature at Y.YY°C".
     - Before writing any query that filters by a named device/city, check whether that name appears in the Device reference table above. 
+    - Limit to 5 attempts. Say plainly when you are unsuccessful.
     """
 
     model = ChatOllama(
