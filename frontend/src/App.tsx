@@ -1,7 +1,10 @@
-import './App.css'
+import ChatPanel from './components/ChatPanel';
+import './components/chat-panel.css';
 
-function App() {
-
+export default function App() {
+  return (
+    <div style={{ height: '100vh' }}>
+      <ChatPanel />
+    </div>
+  );
 }
-
-export default App
