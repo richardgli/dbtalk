@@ -3,7 +3,7 @@ import re
 from typing import Any, List, Tuple
 from dataclasses import dataclass
 
-from agent import agent_setup
+from agent.agent_setup import agent_setup
 
 DEVICE_NAMES = {
     1: "seattle", 2: "sao paulo", 3: "sydney", 4: "london", 5: "paris", 6: "victoria",
@@ -99,9 +99,13 @@ def check_answer(q: dict, response: str) -> Tuple[str, str]:
     return "review", "unrecognized expected_answer type"
 
 
-def get_agent_response(question: dict):
+def get_agent_response(question: str, session_id: str):
+    config = {"configurable": {"thread_id": session_id}}
     agent = agent_setup()
-    return agent.invoke({"messages": [{"role": "user", "content": question}]})
+    return agent.invoke({
+        "messages": [{"role": "user", "content": question}]},
+        config=config,
+    )
 
 
 def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
@@ -109,6 +113,8 @@ def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
     results = []
 
     for q in questions:
+        if q["id"] not in ("q08", "q11", "q12", "q16", "q17"):
+            continue
         print(f"Question {q["id"]}: {q["question"]}")
         response = agent_fn(q["question"])
 

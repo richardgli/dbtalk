@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.state import CompiledStateGraph
 from langchain_ollama import ChatOllama
 from langchain_core.tools import tool
@@ -133,8 +134,11 @@ def agent_setup() -> CompiledStateGraph:
         temperature=0,
     )
 
+    checkpointer = InMemorySaver()
+
     return create_agent(
         model=model,
         tools=[execute_sql],
         system_prompt=system_prompt,
+        checkpointer=checkpointer,
     )
