@@ -30,6 +30,8 @@ export default function SQLBlock({ sql }: SQLBlockProps) {
             fontSize: '12.5px',
             borderRadius: '6px',
             padding: '10px 12px',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#8da9c4ff transparent',
           }}
         >
           {sql}
