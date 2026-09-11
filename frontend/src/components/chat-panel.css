@@ -1,20 +1,16 @@
-:root {
-  --regal-navy: #134074ff;
-  --oxford-navy: #13315cff;
-  --prussian-blue: #0b2545ff;
-  --powder-blue: #8da9c4ff;
-  --mint-cream: #eef4edff;
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
 
-  --dbt-bg: var(--prussian-blue);
-  --dbt-panel: var(--oxford-navy);
-  --dbt-border: #2b3c52;
-  --dbt-ink: var(--mint-cream);
-  --dbt-ink-muted: var(--powder-blue);
-  --dbt-accent: var(--regal-navy);
+:root {
+  --dbt-bg: #15161f;
+  --dbt-panel: #20212d;
+  --dbt-border: #393b4f;
+  --dbt-ink: #f5f3ff;
+  --dbt-ink-muted: #a8a9ba;
+  --dbt-accent: #6a85df;
   --dbt-accent-bg: rgba(102, 127, 130, 0.251);
-  --dbt-radius: 8px;
-  --dbt-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --dbt-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --dbt-radius: 14px;
+  --dbt-mono: 'DM Mono', ui-monospace, monospace;
+  --dbt-sans: 'Manrope', -apple-system, sans-serif;
 }
 
 * {
@@ -84,6 +80,7 @@ html, body, #root {
 .chat-panel__input-row input:focus {
   outline: none;
   border-color: var(--dbt-accent);
+  box-shadow: 0 0 0 4px rgba(139, 124, 255, 0.12);
 }
 
 .chat-panel__input-row button {
@@ -129,8 +126,13 @@ html, body, #root {
   min-width: 0;
 }
 .chat-message--user .chat-message__body {
-  background: var(--dbt-accent-bg);
+  background: #435db4;
   border-color: var(--dbt-accent-bg);
+  border-radius: 15px 4px 15px 15px;
+}
+
+.chat-message--assistant .chat-message__body {
+  border-radius: 4px 15px 15px 15px;
 }
 
 .chat-message__text {

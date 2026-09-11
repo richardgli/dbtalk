@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {
+  --header-ink: #f5f3ff;
+  --header-muted: #a8a9ba;
+  --header-border: rgba(255, 255, 255, 0.08);
+  --header-lightblue: #6a85df;
+  --header-white: #86a6fc;
+}
+
+.chat-panel__header {
+  height: 76px;
+  padding: 0 clamp(20px, 7vw, 96px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--header-border);
+  background: rgba(21, 22, 31, 0.74);
+  backdrop-filter: blur(14px);
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.chat-panel__brand { display: flex; align-items: center; gap: 11px; }
+
+.chat-panel__brand-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: radial-gradient(circle at center, var(--header-white), var(--header-lightblue));
+  color: #171724;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  box-shadow: 0 6px 20px rgba(121, 105, 237, 0.26);
+}
+
+.chat-panel__brand h1 {
+  margin: 0; color: var(--header-ink); font-size: 16px;
+  font-weight: 800; letter-spacing: -0.05em;
+}
+
+.chat-panel__brand p {
+  margin: 1px 0 0; color: var(--header-muted);
+  font-size: 11px; font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .chat-panel__header { height: 66px; }
+}

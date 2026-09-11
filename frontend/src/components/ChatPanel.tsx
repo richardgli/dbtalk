@@ -56,6 +56,15 @@ export default function ChatPanel() {
   return (
     <div className="chat-panel">
       <div className="chat-panel__main">
+        <header className="chat-panel__header">
+          <div className="chat-panel__brand">
+            <span className="chat-panel__brand-mark">db</span>
+            <div>
+              <h1>dbtalk</h1>
+              <p>Ask your data anything</p>
+            </div>
+          </div>
+        </header>
         <div className="chat-panel__messages">
           {messages.length === 0 && (
             <p className="chat-panel__placeholder">
