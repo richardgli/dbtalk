@@ -53,26 +53,8 @@ export default function ChatPanel() {
     sendQuestion(input);
   }
 
-  const pastQuestions = messages.filter((m) => m.role === 'user');
-
   return (
     <div className="chat-panel">
-      <aside className="chat-panel__history">
-        <p className="chat-panel__history-label">History</p>
-        {pastQuestions.length === 0 && (
-          <p className="chat-panel__history-empty">Your questions</p>
-        )}
-        {pastQuestions.map((m, i) => (
-          <button
-            key={i}
-            className="chat-panel__history-item"
-            onClick={() => sendQuestion(m.text)}
-          >
-            {m.text}
-          </button>
-        ))}
-      </aside>
-
       <div className="chat-panel__main">
         <div className="chat-panel__messages">
           {messages.length === 0 && (
