@@ -7,4 +7,5 @@ pandas
 numpy
 pytest
 fastapi
+uvicorn
 itsdangerous

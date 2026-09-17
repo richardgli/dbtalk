@@ -1,4 +1,33 @@
 services:
+  frontend:
+    build: ./frontend
+    container_name: dbtalk-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+    depends_on:
+      - backend
+  
+  backend:
+    build: ./backend
+    container_name: dbtalk-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      FRONTEND_URL: ${FRONTEND_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      OLLAMA_URL: ${OLLAMA_URL}
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      - timescaledb
+      - ollama
+
   timescaledb:
     image: timescale/timescaledb:latest-pg18
     container_name: timescaledb
@@ -11,6 +40,7 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - timescaledb_data:/var/lib/postgresql
+
   ollama:
     image: ollama/ollama
     container_name: ollama
@@ -18,7 +48,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-    - ollama_data:/root/.ollama
+      - ollama_data:/root/.ollama
 
 volumes:
   timescaledb_data:
