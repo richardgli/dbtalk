@@ -58,7 +58,7 @@ export default function ChatPanel() {
       <div className="chat-panel__main">
         <header className="chat-panel__header">
           <div className="chat-panel__brand">
-            <span className="chat-panel__brand-mark">db</span>
+            <img className="chat-panel__brand-mark" src="/dbtalk_logo.png" alt="dbtalk logo" />
             <div>
               <h1>dbtalk</h1>
               <p>Ask your data anything</p>
