@@ -1,22 +1,95 @@
-import { useState, useRef, useEffect, type SubmitEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, type SubmitEvent } from 'react';
 import ChatMessage from '../components/ChatMessage';
-import type { ChatMessageData, QueryRequest, QueryResponse } from '../data/types';
+import Sidebar from '../components/Sidebar';
+import type {
+  ChatMessageData,
+  Conversation,
+  QueryRequest,
+  QueryResponse,
+  MessageResponse,
+} from '../data/types';
 
 const API_URL: string = import.meta.env.VITE_API_URL;
+
+function makeSessionId(): string {
+  return crypto.randomUUID();
+}
 
 export default function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sessionId] = useState<string>(() => crypto.randomUUID());
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [sessionId, setSessionId] = useState<string>(() => {
+    // Check for session_id in URL params, otherwise generate new one
+    const params = new URLSearchParams(window.location.search);
+    return params.get('session_id') || makeSessionId();
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  const refreshConversations = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/conversations`);
+      if (res.ok) {
+        setConversations(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+    }
+  }, []);
+
+  // Load the conversation list on mount
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
+
+  // Load message history whenever the active session changes
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHistory() {
+      try {
+        const res = await fetch(`${API_URL}/api/conversations/${sessionId}/messages`);
+        if (res.ok) {
+          const history: MessageResponse[] = await res.json();
+          if (cancelled) return;
+          setMessages(
+            history.map((msg): ChatMessageData => ({
+              role: msg.role,
+              text: msg.text,
+              sql: msg.sql || undefined,
+              rows: msg.rows || undefined,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load conversation history:', err);
+      }
+    }
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  function handleSelectConversation(id: string) {
+    if (id === sessionId) return;
+    setSessionId(id);
+  }
+
+  function handleNewChat() {
+    setMessages([]);
+    setInput('');
+    setSessionId(makeSessionId());
+  }
+
   async function sendQuestion(question: string) {
     if (!question.trim() || loading) return;
+
+    const isFirstMessage = messages.length === 0;
 
     setMessages((prev) => [...prev, { role: 'user', text: question }]);
     setInput('');
@@ -37,6 +110,21 @@ export default function ChatPanel() {
         ...prev,
         { role: 'assistant', text: data.answer, sql: data.sql, rows: data.results },
       ]);
+
+      // Give a brand-new conversation a title from its first question
+      if (isFirstMessage) {
+        const title = question.length > 50 ? `${question.slice(0, 50)}…` : question;
+        try {
+          await fetch(`${API_URL}/api/conversations/${sessionId}/title`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title }),
+          });
+        } catch (err) {
+          console.error('Failed to set conversation title:', err);
+        }
+      }
+      refreshConversations();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setMessages((prev) => [
@@ -51,10 +139,16 @@ export default function ChatPanel() {
   const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     sendQuestion(input);
-  }
+  };
 
   return (
     <div className="chat-panel">
+      <Sidebar
+        conversations={conversations}
+        activeId={sessionId}
+        onSelect={handleSelectConversation}
+        onNewChat={handleNewChat}
+      />
       <div className="chat-panel__main">
         <header className="chat-panel__header">
           <div className="chat-panel__brand">

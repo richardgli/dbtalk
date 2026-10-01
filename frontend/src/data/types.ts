@@ -21,3 +21,17 @@ export interface QueryResponse {
   sql: string;
   results: QueryResultRow[];
 }
+
+export interface Conversation {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title: string | null;
+}
+
+export interface MessageResponse {
+  role: Role;
+  text: string;
+  sql: string | null;
+  rows: QueryResultRow[] | null;
+}
