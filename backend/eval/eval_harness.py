@@ -1,13 +1,46 @@
+import time
 import json
 import re
 from typing import Any, List, Tuple
 from dataclasses import dataclass
+
+from langchain_core.callbacks import BaseCallbackHandler
 
 from agent.agent_setup import agent_setup
 
 DEVICE_NAMES = {
     1: "seattle", 2: "sao paulo", 3: "sydney", 4: "london", 5: "paris", 6: "victoria",
 }
+
+class MetricsCallback(BaseCallbackHandler):
+    def __init__(self):
+        self.llm_start = None
+        self.tool_start = None
+        self.llm_calls = []
+        self.tool_calls = []
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.llm_start = time.perf_counter()
+
+    def on_llm_end(self, response, **kwargs):
+        elapsed = time.perf_counter() - self.llm_start
+
+        self.llm_calls.append({
+            "latency": elapsed,
+            "usage": response.llm_output.get("token_usage", {})
+                if response.llm_output else {}
+        })
+
+    def on_tool_start(self, serialized, input_str, **kwargs):
+        self.tool_start = time.perf_counter()
+
+    def on_tool_end(self, output, **kwargs):
+        elapsed = time.perf_counter() - self.tool_start
+
+        self.tool_calls.append({
+            "latency": elapsed,
+            "output": str(output)
+        })
 
 @dataclass
 class EvalResult:
@@ -100,12 +133,26 @@ def check_answer(q: dict, response: str) -> Tuple[str, str]:
 
 
 def get_agent_response(question: str, session_id: str):
-    config = {"configurable": {"thread_id": session_id}}
+    metrics = MetricsCallback()
+    config = {"configurable": {"thread_id": session_id}, "callbacks": [metrics], "recursion_limit": 5}
     agent = agent_setup()
-    return agent.invoke({
+    start = time.perf_counter()
+    results = agent.invoke({
         "messages": [{"role": "user", "content": question}]},
         config=config,
     )
+    total_time = time.perf_counter() - start
+    with open("output.txt", "a", encoding="utf-8") as file:
+        file.write(f"\nTotal: {total_time:.2f}s")
+        file.write(f"\nLLM calls: {len(metrics.llm_calls)}")
+        file.write(f"\nTool calls: {len(metrics.tool_calls)}")
+
+        for i, call in enumerate(metrics.llm_calls):
+            file.write(f"\nLLM {i + 1}: {call['latency']:.2f}s")
+
+        for i, call in enumerate(metrics.tool_calls):
+            file.write(f"\nTool {i + 1}: {call['latency']:.2f}s")
+    return results
 
 
 def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
@@ -113,17 +160,16 @@ def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
     results = []
 
     for q in questions:
-        if q["id"] not in ("q08", "q11", "q12", "q16", "q17"):
-            continue
-        print(f"Question {q["id"]}: {q["question"]}")
-        response = agent_fn(q["question"])
+        with open("output.txt", "a", encoding="utf-8") as file:
+            file.write(f"\n\nQuestion {q["id"]}: {q["question"]}")
+            response = agent_fn(q["question"], 1)
 
-        final_text = next(
-            msg.content for msg in reversed(response["messages"])
-            if msg.type == "ai" and msg.content
-        )
+            final_text = next(
+                msg.content for msg in reversed(response["messages"])
+                if msg.type == "ai" and msg.content
+            )
 
-        print(f"Answer: {final_text}\n")
+            file.write(f"\n\nAnswer: {final_text}\n")
         verdict, reason = check_answer(q, final_text)
         results.append(EvalResult(
             id=q["id"], question=q["question"], expected=q["expected_answer"], agent_response=response, verdict=verdict, reason=reason,
@@ -134,11 +180,12 @@ def run_eval(eval_set_path: str, agent_fn) -> List[EvalResult]:
 
 def print_summary(results: List[EvalResult]):
     counts = {"pass": 0, "fail": 0, "review": 0}
-    for r in results:
-        counts[r.verdict] += 1
-        print(f"[{r.verdict.upper():6}] {r.id}: {r.reason}")
+    with open("output.txt", "a", encoding="utf-8") as file:
+        for r in results:
+            counts[r.verdict] += 1
+            file.write(f"\n\n[{r.verdict.upper():6}] {r.id}: {r.reason}")
 
-    print(f"\n{counts['pass']} passed, {counts['fail']} failed, {counts["review"]} need review out of {len(results)}")
+        file.write(f"\n{counts['pass']} passed, {counts['fail']} failed, {counts["review"]} need review out of {len(results)}")
 
 
 if __name__ == "__main__":
