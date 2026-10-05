@@ -1,4 +1,4 @@
-import ast
+import json
 import re
 
 def parse_agent_response(state: dict):
@@ -18,11 +18,12 @@ def parse_agent_response(state: dict):
     answer = match.group(1).strip() if match else final_content
 
     results = []
-    if raw_results:
+    if raw_results and raw_results != "NO_DATA":
         try:
-            rows = ast.literal_eval(raw_results)
-            results = [{"result": row[0] if len(row) == 1 else dict(enumerate(row)) for row in rows}]
-        except (ValueError, SyntaxError):
+            parsed = json.loads(raw_results)
+            if isinstance(parsed, list):
+                results = parsed
+        except (ValueError, TypeError):
             results = []
 
     return {"answer": answer, "sql": sql, "results": results}

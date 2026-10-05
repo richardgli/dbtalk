@@ -19,9 +19,12 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./data:/app/data
     environment:
+      PYTHONPATH: /app
       FRONTEND_URL: ${FRONTEND_URL}
       DATABASE_URL: ${DATABASE_URL}
+      DEV_DATABASE_URL: ${DEV_DATABASE_URL}
       OLLAMA_URL: ${OLLAMA_URL}
       SECRET_KEY: ${SECRET_KEY}
     depends_on:

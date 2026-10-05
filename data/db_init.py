@@ -1,5 +1,7 @@
 from sqlalchemy import text
 from data.schema.base import Base, engine, test_engine
+from data.schema.conversation import Conversation
+from data.schema.message import Message
 
 def init_tables():
     Base.metadata.create_all(engine)

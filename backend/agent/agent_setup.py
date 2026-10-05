@@ -1,18 +1,26 @@
-from langchain.agents import create_agent
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph.state import CompiledStateGraph
-from langchain_ollama import ChatOllama
-from langchain_core.tools import tool
 import psycopg2
 import re
 import os
 from dotenv import load_dotenv
 
+import json
+from decimal import Decimal
+from datetime import date, datetime
+
+from langchain.agents import create_agent
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.state import CompiledStateGraph
+from langchain_ollama import ChatOllama
+from langchain_core.tools import tool
+
 load_dotenv()
 
 
 def get_connection():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    dsn = os.getenv("DATABASE_URL")
+    if dsn and dsn.startswith("postgresql+"):
+        dsn = "postgresql://" + dsn.split("://", 1)[1]
+    return psycopg2.connect(dsn)
 
 
 def get_schema_text():
@@ -75,6 +83,15 @@ def sanitize_sql(query: str) -> str:
         raise ValueError("DML/DDL detected. Only read-only queries are allowed.")
     return q
 
+def _json_default(obj):
+    from decimal import Decimal
+    from datetime import date, datetime
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
 
 @tool(description="Executes the given SQL query")
 def execute_sql(query: str) -> str:
@@ -83,17 +100,23 @@ def execute_sql(query: str) -> str:
     try:
         with conn.cursor() as cur:
             cur.execute(q)
-            if cur.description:
-                rows = cur.fetchall()
-                if not rows:
-                    return "NO_DATA"
-                if len(rows) > 20:
-                    return (f"Query returned {len(rows)} rows."
-                            f"Rewrite the query to use COUNT(*), EXISTS(...), or another aggregate "
-                            f"so it returns a single summary value instead of raw rows. "
-                            f"First 3 rows for reference: {rows[:3]}")
-                return str(rows) if rows else "NO_DATA"
-            return "NO_DATA"
+            if not cur.description:
+                return "NO_DATA"
+
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+            if not rows:
+                return "NO_DATA"
+
+            if len(rows) > 20:
+                preview = [dict(zip(columns, row)) for row in rows[:3]]
+                return (f"Query returned {len(rows)} rows."
+                        f"Rewrite the query to use COUNT(*), EXISTS(...), or another aggregate "
+                        f"so it returns a single summary value instead of raw rows. "
+                        f"First 3 rows for reference: {json.dumps(preview, default=_json_default)}")
+
+            result_rows = [dict(zip(columns, row)) for row in rows]
+            return json.dumps(result_rows, default=_json_default)
     except Exception as e:
         return f"Error: {e}"
     finally:
@@ -119,10 +142,10 @@ def agent_setup() -> CompiledStateGraph:
     When answering a database question:
     - Think step-by-step. When you need data, call execute_sql with ONE query. When querying with device information, ensure that it exists in the devices table.
     - You cannot use INSERT/UPDATE/DELETE/ALTER/DROP/CREATE/REPLACE/TRUNCATE in your query.
+    - Limit to 5 attempts. Say plainly when you are unsuccessful.
     - If the tool returns 'Error:', read the error message, revise the SQL and try again.
     - Time and distance values CANNOT be negative. Revise your SQL to ensure that you get positive values.
     - Your final answer must always state the exact numeric value(s) returned by the query. For example, if asked "which device had the highest average temperature," answer "Device X had the highest average temperature at Y.YY°C".
-    - Limit to 5 attempts. Say plainly when you are unsuccessful.
 
     Examples:
     {get_few_shots()}
@@ -134,7 +157,7 @@ def agent_setup() -> CompiledStateGraph:
         temperature=0,
     )
 
-    checkpointer = InMemorySaver()
+    checkpointer = MemorySaver()
 
     return create_agent(
         model=model,

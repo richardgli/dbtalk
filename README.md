@@ -18,6 +18,7 @@
 - Generated queries are sanitized to allow only `SELECT`/`WITH`; any DML/DDL is rejected before execution
 - When a query errors, the agent reads the error message and revises the SQL, retrying up to 5 attempts
 - UI shows the natural-language answer, a syntax-highlighted SQL block, and the raw result rows
-- Each chat session carries its own ID with in-memory checkpointing
+- Chat history is saved to the database and restored when returning to a conversation
+- Agent maintains context within each session using LangGraph's MemorySaver
 - Deterministic generator produces realistic temperature readings and random outage windows for local development and testing
 - Evaluation harness scores the agent against expected answers and records per-call latency and token metrics
